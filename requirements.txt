@@ -1,0 +1,8 @@
+﻿yt-dlp
+openai-whisper
+torch
+torchaudio
+ffmpeg-python
+tkinter-tooltip
+flask
+openai

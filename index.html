@@ -1,0 +1,48 @@
+﻿<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Транскриптор відео YouTube</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <h1>Транскриптор відео YouTube</h1>
+    
+    <form class="card" method="post" action="{{ url_for('analyze') }}" enctype="multipart/form-data" id="analyze-form">
+      <label for="source">Посилання на YouTube відео:</label>
+      <input id="source" name="source" type="text" placeholder="https://www.youtube.com/watch?v=..." value="{{ source or '' }}">
+
+      <label for="audio_file">Або виберіть локальний файл:</label>
+      <input id="audio_file" name="audio_file" type="file" accept=".mp3,.wav,.m4a,.mp4">
+
+      <button type="submit" id="analyze-btn">Аналізувати відео</button>
+      <p class="status" id="status">Готовий до роботи</p>
+    </form>
+
+    {% if error %}
+      <div class="card error">{{ error }}</div>
+    {% endif %}
+
+    {% if full_text or summary %}
+      <section class="card">
+        <div class="tabs">
+          <button type="button" class="tab-btn active" data-target="full-text">Повний текст</button>
+          <button type="button" class="tab-btn" data-target="summary">Конспект</button>
+        </div>
+
+        <article id="full-text" class="tab-content active">{{ full_text or '' }}</article>
+        <article id="summary" class="tab-content">{{ summary or '' }}</article>
+
+        <form method="post" action="{{ url_for('download_summary') }}">
+          <textarea name="summary" hidden>{{ summary or '' }}</textarea>
+          <button type="submit" {% if not summary %}disabled{% endif %}>Зберегти конспект</button>
+        </form>
+      </section>
+    {% endif %}
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
