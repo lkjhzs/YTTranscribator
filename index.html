@@ -17,6 +17,13 @@
       <label for="audio_file">Або виберіть локальний файл:</label>
       <input id="audio_file" name="audio_file" type="file" accept=".mp3,.wav,.m4a,.mp4">
 
+      <label for="quality">Якість розпізнавання:</label>
+      <select id="quality" name="quality">
+        <option value="fast" {% if quality == 'fast' %}selected{% endif %}>Швидко - base, нижча точність</option>
+        <option value="balanced" {% if not quality or quality == 'balanced' %}selected{% endif %}>Баланс - small, рекомендовано</option>
+        <option value="accurate" {% if quality == 'accurate' %}selected{% endif %}>Точніше - medium, довше очікування</option>
+      </select>
+
       <button type="submit" id="analyze-btn">Аналізувати відео</button>
       <p class="status" id="status">Готовий до роботи</p>
     </form>

@@ -17,6 +17,7 @@ app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024 * 1024  # 1GB
 # Initialize heavy services lazily so the website opens immediately.
 downloader = None
 transcriber = None
+transcribers = {}
 summarizer = None
 
 
@@ -31,6 +32,35 @@ def get_services():
     return downloader, transcriber, summarizer
 
 
+def get_downloader():
+    global downloader
+    if downloader is None:
+        downloader = YouTubeDownloader()
+    return downloader
+
+
+def get_transcriber(quality="balanced"):
+    global transcriber, transcribers
+    settings = SpeechTranscriber.settings_for_quality(quality)
+    cache_key = (settings["model_size"], settings["accuracy_mode"])
+
+    if cache_key not in transcribers:
+        transcribers[cache_key] = SpeechTranscriber(
+            model_size=settings["model_size"],
+            accuracy_mode=settings["accuracy_mode"],
+        )
+
+    transcriber = transcribers[cache_key]
+    return transcriber
+
+
+def get_summarizer():
+    global summarizer
+    if summarizer is None:
+        summarizer = TextSummarizer()
+    return summarizer
+
+
 def is_youtube_url(value: str) -> bool:
     lowered = value.lower()
     return "youtube.com" in lowered or "youtu.be" in lowered
@@ -40,6 +70,10 @@ def validate_extension(filename: str) -> bool:
     return Path(filename).suffix.lower() in ALLOWED_EXTENSIONS
 
 
+def validate_quality(value: str) -> str:
+    return value if value in {"fast", "balanced", "accurate"} else "balanced"
+
+
 @app.route("/", methods=["GET"])
 def index():
     return render_template("index.html")
@@ -47,8 +81,10 @@ def index():
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
-    downloader_service, transcriber_service, summarizer_service = get_services()
+    downloader_service = get_downloader()
+    summarizer_service = get_summarizer()
     source_value = (request.form.get("source") or "").strip()
+    quality = validate_quality(request.form.get("quality") or "balanced")
     uploaded = request.files.get("audio_file")
 
     if not source_value and (not uploaded or not uploaded.filename):
@@ -56,19 +92,25 @@ def analyze():
             "index.html",
             error="Введіть YouTube-посилання або завантажте локальний файл.",
             source=source_value,
+            quality=quality,
         )
 
     temp_file_path = None
 
     try:
+        full_text = ""
+
         if source_value and is_youtube_url(source_value):
-            audio_path = downloader_service.download_audio(source_value)
+            full_text = downloader_service.get_subtitles_text(source_value)
+            if not full_text:
+                audio_path = downloader_service.download_audio(source_value)
         elif uploaded and uploaded.filename:
             if not validate_extension(uploaded.filename):
                 return render_template(
                     "index.html",
                     error="Підтримуються формати: .mp3, .wav, .m4a, .mp4",
                     source=source_value,
+                    quality=quality,
                 )
 
             safe_name = secure_filename(uploaded.filename)
@@ -82,15 +124,19 @@ def analyze():
         else:
             audio_path = source_value
 
-        if not os.path.exists(audio_path):
-            raise RuntimeError(f"Файл не знайдено: {audio_path}")
+        if not full_text:
+            if not os.path.exists(audio_path):
+                raise RuntimeError(f"Файл не знайдено: {audio_path}")
 
-        full_text = transcriber_service.transcribe(audio_path)
+            transcriber_service = get_transcriber(quality)
+            full_text = transcriber_service.transcribe(audio_path)
+
         summary = summarizer_service.create_summary(full_text)
 
         return render_template(
             "index.html",
             source=source_value,
+            quality=quality,
             full_text=full_text,
             summary=summary,
         )
@@ -100,6 +146,7 @@ def analyze():
             "index.html",
             error=f"Виникла помилка: {exc}",
             source=source_value,
+            quality=quality,
         )
     finally:
         if temp_file_path and os.path.exists(temp_file_path):
